@@ -1,0 +1,44 @@
+# ---- Python ----
+# Compiled Python files (auto-generated, not needed in Git)
+__pycache__/
+*.py[cod]
+
+.venv/
+
+# Build artifacts from pip install -e .
+*.egg-info/
+dist/
+build/
+
+# ---- Data ----
+# Raw data files are tracked by DVC, not Git
+data/raw/
+data/processed/
+data/features/
+
+# ---- Models ----
+# Trained model files are large — tracked by DVC, not Git
+models/
+*.h5
+*.pb
+saved_model/
+
+# ---- MLflow ----
+# MLflow creates a local folder to store experiment results
+mlruns/
+mlartifacts/
+
+# ---- Environment variables ----
+.env
+.env.local
+
+# ---- VS Code ----
+.vscode/
+
+# ---- macOS ----
+# macOS creates these hidden files in every folder — we don't need them
+.DS_Store
+
+# ---- Notebooks ----
+# Notebook checkpoints are auto-generated
+.ipynb_checkpoints/

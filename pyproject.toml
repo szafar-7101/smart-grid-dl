@@ -1,0 +1,105 @@
+# pyproject.toml
+# This is the central configuration file for the entire project.
+# .flake8, and other separate files — everything lives here now.
+
+[project]
+# The name of your project as it would appear if published
+name = "smart-grid-dl"
+
+# The current version of the project
+version = "0.1.0"
+
+# A short description that appears on GitHub and PyPI
+description = "Deep learning platform for smart grid power load analysis and forecasting"
+
+# The minimum Python version required to run this project
+requires-python = ">=3.10"
+
+# ---------------------------------------------------------------
+# Dependencies 
+# ---------------------------------------------------------------
+dependencies = [
+    # Core data manipulation — the foundation of all data work in Python
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+
+    # Deep learning framework — we use TensorFlow to build LSTM and Transformer models
+    "tensorflow>=2.13.0",
+
+    # Hyperparameter tuning — automatically finds the best model settings
+    "optuna>=3.3.0",
+
+    # Experiment tracking — records every training run with its metrics
+    "mlflow>=2.7.0",
+
+    # API framework — serves our model as a web API
+    "fastapi>=0.103.0",
+
+    # ASGI server — the engine that runs FastAPI (FastAPI needs this to actually serve requests)
+    "uvicorn>=0.23.0",
+
+    # Data validation for API requests — ensures incoming data has the right shape and types
+    "pydantic>=2.3.0",
+
+    # Frontend framework — turns Python scripts into beautiful web UIs
+    "streamlit>=1.27.0",
+
+    # Interactive charts — creates all the graphs in our dashboard
+    "plotly>=5.17.0",
+
+    # ML explainability — shows which features drove each prediction
+    "shap>=0.43.0",
+
+    # Structured logging — much better than Python's default logging module
+    "loguru>=0.7.0",
+
+    # Holiday detection — tells our feature engineering which days are public holidays
+    "holidays>=0.36",
+
+    # Statistical time series decomposition — separates trend, seasonality, residual
+    "statsmodels>=0.14.0",
+
+    # HTTP client — used by the Streamlit app to talk to the FastAPI backend
+    "httpx>=0.25.0",
+
+    # Python-multipart — needed by FastAPI to accept file uploads
+    "python-multipart>=0.0.6",
+]
+
+# ---------------------------------------------------------------
+# Extra dependencies only needed for development (testing, linting)
+# Install these with: pip install -e ".[dev]"
+# ---------------------------------------------------------------
+[project.optional-dependencies]
+dev = [
+    # Testing framework
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+
+    # Code formatter — automatically formats your code to a consistent style
+    "black>=23.9.0",
+
+    # Linter — catches bugs and style issues before they become problems
+    "ruff>=0.0.292",
+]
+
+# ---------------------------------------------------------------
+# Ruff linter configuration
+# Ruff is extremely fast and catches common Python mistakes
+# ---------------------------------------------------------------
+[tool.ruff]
+# Check all Python files in the src, api, app, and tests directories
+select = ["E", "F", "I"]
+
+# Ignore line-too-long warnings (we sometimes need long lines for readability)
+ignore = ["E501"]
+
+# ---------------------------------------------------------------
+# Pytest configuration
+# ---------------------------------------------------------------
+[tool.pytest.ini_options]
+# Look for tests in the tests/ directory
+testpaths = ["tests"]
+
+# Treat warnings as errors so nothing silently breaks
+filterwarnings = ["error"]
