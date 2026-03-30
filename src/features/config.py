@@ -1,17 +1,18 @@
-# src/features/config.py
-#
+
 # Configuration for the feature engineering module.
-# All constants live here — nothing is hardcoded in engineering.py.
+
 
 from pathlib import Path
-from src.ingestion.config import PROJECT_ROOT, TARGET_COLUMN
+
+from src.ingestion.config import PROJECT_ROOT
 
 # ----------------------------------------------------------------
 # File paths
 # ----------------------------------------------------------------
 
 # Input: the clean hourly data produced by the ingestion pipeline
-FEATURES_INPUT_FILE = PROJECT_ROOT / "data" / "processed" / "household_power_consumption.parquet"
+# Make sure this name is consistent with the output file name in src/ingestion/ingest.py
+FEATURES_INPUT_FILE = PROJECT_ROOT / "data" / "processed" / "household_power_consumption.parquet" 
 
 # Output: the feature matrix ready for model input
 FEATURES_OUTPUT_FILE = PROJECT_ROOT / "data" / "features" / "feature_matrix.parquet"

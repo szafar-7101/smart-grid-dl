@@ -25,8 +25,6 @@ import pandas as pd
 from loguru import logger
 from sklearn.preprocessing import MinMaxScaler
 
-# The holidays library knows the public holidays for every country.
-# We use it to create an "is_holiday" flag for each row.
 from src.features.config import (
     CYCLICAL_FEATURES,
     EVENING_PEAK_HOURS,
@@ -108,7 +106,7 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     # so they match the date objects that the holidays library produces.
     # Without this, pandas raises a FutureWarning about comparing
     # datetime64 with date objects — which we treat as an error.
-    index_as_dates = df.index.normalize().to_pydatetime()
+    index_as_dates = df.index.normalize().to_pydatetime() ### This is pretty important 
     # .to_pydatetime() converts each pandas Timestamp to a Python datetime object.
     # Then we extract just the .date() part from each one so it matches
     # what fr_holidays contains (plain date objects, not datetimes).
@@ -118,11 +116,6 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
         index=df.index,
         dtype=int,
     )
-# Instead of .isin() which has the type mismatch problem,
-# we use a plain Python list comprehension: "is this date in fr_holidays?"
-# pd.Series(..., index=df.index) ensures the result aligns correctly
-# with the DataFrame rows.
-
     # is_peak_hour: 1 if this is a typical high-demand hour, 0 otherwise.
     # Morning peak: 7–9am. Evening peak: 5–8pm.
     peak_hours = MORNING_PEAK_HOURS + EVENING_PEAK_HOURS
