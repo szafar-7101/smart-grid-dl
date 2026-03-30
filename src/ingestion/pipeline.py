@@ -276,33 +276,12 @@ def run_pipeline(
     output_filepath: Optional[Path] = None,
     save: bool = True,
 ) -> pd.DataFrame:
-    """
-    Runs the complete ingestion pipeline end to end.
-
-    This is the only function you should call from outside this module.
-    It runs load → validate → clean → resample → save in order.
-
-    Args:
-        input_filepath:  Path to the raw data file.
-                         Defaults to RAW_DATA_FILE from config.
-        output_filepath: Path to save the processed file.
-                         Defaults to PROCESSED_DATA_FILE from config.
-        save:            Whether to save the result to disk.
-                         Set to False during testing.
-
-    Returns:
-        The final processed DataFrame ready for feature engineering.
-    """
     log = logger.bind(name=LOGGER_NAME)
     log.info("=== Starting ingestion pipeline ===")
 
-    # Use config defaults if no paths were passed in
-    input_filepath = input_filepath or RAW_DATA_FILE
-    output_filepath = output_filepath or PROCESSED_DATA_FILE
-
-    # from config — imported at the top
-    from src.ingestion.config import PROCESSED_DATA_FILE, RAW_DATA_FILE
-
+    # Use config defaults if no paths were passed in.
+    # RAW_DATA_FILE and PROCESSED_DATA_FILE are already imported
+    # at the top of this file — no need to import them again here.
     input_filepath = input_filepath or RAW_DATA_FILE
     output_filepath = output_filepath or PROCESSED_DATA_FILE
 

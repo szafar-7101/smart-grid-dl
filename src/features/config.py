@@ -11,7 +11,7 @@ from src.ingestion.config import PROJECT_ROOT, TARGET_COLUMN
 # ----------------------------------------------------------------
 
 # Input: the clean hourly data produced by the ingestion pipeline
-FEATURES_INPUT_FILE = PROJECT_ROOT / "data" / "processed" / "power_consumption_clean.parquet"
+FEATURES_INPUT_FILE = PROJECT_ROOT / "data" / "processed" / "household_power_consumption.parquet"
 
 # Output: the feature matrix ready for model input
 FEATURES_OUTPUT_FILE = PROJECT_ROOT / "data" / "features" / "feature_matrix.parquet"
