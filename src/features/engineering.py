@@ -271,56 +271,40 @@ def add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
 # Stage 5 — Interaction features
 # ----------------------------------------------------------------
 
-def add_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_interaction_features(
+    df: pd.DataFrame,
+    train_hourly_means: dict = None,
+) -> pd.DataFrame:
     """
-    Creates features that combine two signals into one.
+    Creates interaction features.
 
-    These capture relationships that neither signal expresses alone.
-    For example, "how much does current load deviate from the typical
-    load at this hour?" combines the current load with the hour.
-
-    Args:
-        df: DataFrame with calendar and lag features already added
-
-    Returns:
-        DataFrame with interaction columns added
+    train_hourly_means: if provided, use these pre-computed means from
+    training data only. If None, compute from the current DataFrame.
+    This prevents leakage when applied to val/test splits.
     """
     log = logger.bind(name=LOGGER_NAME)
     log.info("Adding interaction features")
 
     df = df.copy()
 
-    """--- Hourly mean profile ---
-     For each hour of the day (0–23), compute the mean load across
-     all historical rows that share that hour.
-     This gives us a "typical daily profile" — what is load usually
-     like at 9am? At midnight?
-     .transform("mean") is key: it computes the group mean but
-     returns a Series with the SAME index as the original DataFrame.
-     So every row gets the mean of its group, not a collapsed result.
-     This lets us do row-wise operations (subtraction below).
-    """
-    hourly_mean = df.groupby("hour")[TARGET_COLUMN].transform("mean")
-    df["hourly_mean_load"] = hourly_mean
+    if train_hourly_means is not None:
+        # Use pre-computed training means — safe for val/test
+        # .map() replaces each hour value with its mean from training
+        df["hourly_mean_load"] = df["hour"].map(train_hourly_means)
+    else:
+        # Compute from current data — only safe to call on training split
+        hourly_means = df.groupby("hour")[TARGET_COLUMN].transform("mean")
+        df["hourly_mean_load"] = hourly_means
 
-    """ --- Deviation from hourly mean ---
-     How much does the current load deviate from what is typical
-     at this hour? A positive value means higher than usual.
-     The model can learn that unusual deviations might precede
-     certain patterns.
-    """
-    df["load_deviation_from_hourly_mean"] = df[TARGET_COLUMN] - hourly_mean
+    df["load_deviation_from_hourly_mean"] = (
+        df[TARGET_COLUMN] - df["hourly_mean_load"]
+    )
 
-    # --- Load range (max - min over 24h window) ---
-    # How volatile has load been in the last day?
-    # A high range means a lot of fluctuation — potentially unusual conditions.
     if "rolling_max_24h" in df.columns and "rolling_min_24h" in df.columns:
         df["load_range_24h"] = df["rolling_max_24h"] - df["rolling_min_24h"]
 
     log.info("Interaction features created")
-
     return df
-
 
 # ----------------------------------------------------------------
 # Stage 6 — Drop NaN rows
@@ -544,16 +528,29 @@ def run_feature_pipeline(
 
     log.info(f"Loaded {len(df):,} rows spanning {df.index[0]} to {df.index[-1]}")
 
-    # Run each stage in order, feeding output of one into next
+    # Apply all stages except interaction features first
     df = add_calendar_features(df)
     df = add_cyclical_features(df)
     df = add_lag_features(df)
     df = add_rolling_features(df)
-    df = add_interaction_features(df)
     df = drop_nan_rows(df)
 
-    # Split into train/val/test
+    # Split BEFORE computing interaction features
+    # so training means do not leak into val/test
     train_df, val_df, test_df = split_data(df)
+
+    # Compute hourly means on TRAINING data only
+    train_hourly_means = (
+        train_df.groupby("hour")[TARGET_COLUMN].mean().to_dict()
+    )
+    # .to_dict() converts the Series to {0: 1.2, 1: 0.9, ..., 23: 1.1}
+    # Keys are hour values, values are mean load for that hour.
+
+    # Apply interaction features using training means for all splits
+    train_df = add_interaction_features(train_df, train_hourly_means=None)
+    # None here means compute fresh from training data — that is correct
+    val_df   = add_interaction_features(val_df,   train_hourly_means=train_hourly_means)
+    test_df  = add_interaction_features(test_df,  train_hourly_means=train_hourly_means)
 
     # Scale features
     X_train, X_val, X_test, scaler, feature_columns = scale_features(
