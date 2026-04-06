@@ -4,6 +4,10 @@ version = "0.1.0"
 description = "Deep learning platform for smart grid power load analysis and forecasting"
 requires-python = ">=3.10"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "api*", "app*"]
+
 dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.24.0",

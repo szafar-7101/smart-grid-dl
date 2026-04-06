@@ -1,28 +1,42 @@
-"""
-This file holds ALL the configuration for the ingestion pipeline
-Nothing in pipeline.py will have harcoded values
-Every setting lives here so it can be changed in one place 
-"""
+# src/ingestion/config.py
+#
+# This file holds ALL configuration for the ingestion pipeline.
+# Nothing in pipeline.py will have hardcoded values — every setting
+# lives here so it can be changed in one place.
+#
+# Think of this file as the "control panel" for ingestion.
 
-from pathlib import Path 
+from pathlib import Path
+# pathlib.Path is the modern Python way to work with file paths.
+# It is better than plain strings because it works correctly on
+# Mac, Windows, and Linux without you doing anything special.
 
-# Project Root Path 
-#------------------
+# ----------------------------------------------------------------
+# Project root path
+# ----------------------------------------------------------------
+# __file__ is a special Python variable that always equals the path
+# of the current file (config.py in this case).
+# .resolve() converts it to an absolute path (e.g. /Users/you/smart-grid-dl/src/ingestion/config.py)
+# .parent goes up one folder → src/ingestion/
+# .parent again → src/
+# .parent again → smart-grid-dl/   ← this is the project root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# Data Paths
-#------------------
-# These are the paths to each stage of data
-# We build them relative to PROJECT_ROOT so they work on any machine
+# ----------------------------------------------------------------
+# Data paths
+# ----------------------------------------------------------------
+# These are the paths to each stage of data.
+# We build them relative to PROJECT_ROOT so they work on any machine.
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
 PROCESSED_DATA_DIR = PROJECT_ROOT / "data" / "processed"
 FEATURES_DATA_DIR = PROJECT_ROOT / "data" / "features"
 
-# The specific raw file we want to ingest that we have placed in data/raw
+# The specific raw file we expect the user to have placed in data/raw/
 RAW_DATA_FILE = RAW_DATA_DIR / "household_power_consumption.txt"
 
-# The output file after cleaning - saved as paraquet format
-# We will use it for all intermediate data.
+# The output file after cleaning — saved as parquet format.
+# Parquet is a compressed binary format that is much faster to read
+# than CSV for large files. We use it for all intermediate data.
 PROCESSED_DATA_FILE = PROCESSED_DATA_DIR / "household_power_consumption.parquet"
 
 # ----------------------------------------------------------------

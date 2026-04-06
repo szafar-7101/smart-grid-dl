@@ -1,24 +1,23 @@
-# This is the ingestion pipeline 
+# Data ingestion pipeline — stage 1 of the project.
+#
+# Four stages run in order:
+#   1. load_raw_data()       — reads the raw CSV file
+#   2. validate_raw_data()   — checks the data has the right shape
+#   3. clean_data()          — fixes types, removes impossible values
+#   4. resample_to_hourly()  — aggregates minute data to hourly
+#
+# Public entry point: run_pipeline()
+# Call this and you get a clean hourly DataFrame ready for features.
 
-    # It does 4 things in order:
-    #  1. LOAD - Read the raw CSV from the disk into a pandas DATAFRAME
-    #  2. VALIDATE - Check that the data has the right columns and types, and that there are no missing values
-    #  3. CLEAN - Fix missing values, convert types, remove impossible readings
-    #  4. RESAMPLE - Aggregate minute-level data into hourly averages
-
-    # Each of these is a separate function. The run_pipeline() function at the 
-    # bottom calls them in order - that is the only public entry point 
-
-import pandas as pd
 import numpy as np
+import pandas as pd
 from pathlib import Path
+from typing import Optional
 from loguru import logger
-from typing import Optional 
 
 from src.ingestion.config import (
     DATA_SEPARATOR,
     DATE_COLUMN,
-    RAW_DATA_FILE,
     TIME_COLUMN,
     DATETIME_COLUMN,
     TARGET_COLUMN,
@@ -27,268 +26,278 @@ from src.ingestion.config import (
     MAX_MISSING_PERCENTAGE,
     MIN_VALID_POWER,
     MAX_VALID_POWER,
-    PROCESSED_DATA_DIR,
+    RAW_DATA_FILE,
     PROCESSED_DATA_FILE,
+    PROCESSED_DATA_DIR,
     LOGGER_NAME,
 )
+
 
 # ----------------------------------------------------------------
 # Custom exceptions
 # ----------------------------------------------------------------
+
 class DataIngestionError(Exception):
-    """
-    Raised when the ingestion pipeline encounters an unrevoverable error
-    """
+    """Raised when ingestion encounters an unrecoverable error."""
     pass
 
-class DataValidationError(Exception):
-    """
-    Raised when the data fails validation checks
-    """
+
+class DataValidationError(DataIngestionError):
+    """Raised when data fails a quality check."""
     pass
 
+
 # ----------------------------------------------------------------
-# Step 1: Load
+# Stage 1 — Load
 # ----------------------------------------------------------------
+
 def load_raw_data(filepath: Path) -> pd.DataFrame:
     """
-    Reads the raw UCI household power consumption data from a CSV file into a pandas DataFrame.
+    Reads the raw UCI household power consumption file into a DataFrame.
+
+    The file is semicolon-separated and uses "?" for missing values.
+    We tell pandas both of these things upfront so it handles them
+    correctly during loading rather than requiring post-processing.
 
     Args:
-        file_path (Path): The path to the raw .txt file.
+        filepath: Path to the raw .txt file
+
     Returns:
-        pd.DataFrame: The loaded data as a pandas DataFrame.
+        Raw DataFrame with all original columns as strings/NaN
+
     Raises:
-        DataIngestionError: If the file does not exist or cannot be parsed.
+        DataIngestionError: If the file does not exist or cannot be parsed
     """
     log = logger.bind(name=LOGGER_NAME)
-    # Check if the file actually exists or not 
+
     if not filepath.exists():
         raise DataIngestionError(
-            f"Raw data file not found at : {filepath}\n"
-            f"Please place household_power_consumption.txt in the 'data/raw' directory and try again."
+            f"Raw data file not found at: {filepath}\n"
+            f"Please place household_power_consumption.txt in data/raw/"
         )
-    log.info(f"Loading raw data from {filepath}...")
+
+    log.info(f"Loading raw data from {filepath}")
 
     try:
         df = pd.read_csv(
             filepath,
-            sep= DATA_SEPARATOR,
+            sep=DATA_SEPARATOR,
+            # low_memory=False: read the whole file before inferring types
+            # Without this pandas sometimes guesses wrong column types
             low_memory=False,
-            na_values=["?"]
+            # na_values: treat "?" as missing — the UCI dataset convention
+            na_values=["?"],
         )
     except Exception as e:
         raise DataIngestionError(f"Failed to read file: {e}") from e
-    log.info(f"Loaded {len(df):,} rows and {len(df.columns)} columns.")
 
+    log.info(f"Loaded {len(df):,} rows and {len(df.columns)} columns")
     return df
 
 
 # ----------------------------------------------------------------
-# Step 2: Validate
+# Stage 2 — Validate
 # ----------------------------------------------------------------
+
 def validate_raw_data(df: pd.DataFrame) -> None:
     """
-    Checks that the raw DataFrame has the expected structure.
+    Checks the raw DataFrame has the expected structure.
     Raises DataValidationError if anything critical is wrong.
+    Returns nothing — its only job is to raise errors early.
 
     Args:
-        df (pd.DataFrame): The raw DataFrame from load_raw_data()
+        df: Raw DataFrame from load_raw_data()
 
     Raises:
-        DataValidationError: If the DataFrame is missing expected columns or has too many missing values.
+        DataValidationError: If the data is empty, missing columns,
+                             or has too many missing target values
     """
     log = logger.bind(name=LOGGER_NAME)
-    log.info("Validating raw data")
+    log.info("Validating raw data structure")
 
-    # Check 1 : Check if the loaded dataframe is empty or not
     if df.empty:
-        raise DataValidationError("The Loaded DataFrame is empty. Please check the raw data file.")
-    # Check 2 : Required Columns must be present 
+        raise DataValidationError(
+            "The loaded DataFrame is empty — the file may be corrupted"
+        )
+
     required_columns = {DATE_COLUMN, TIME_COLUMN, TARGET_COLUMN}
     missing_columns  = required_columns - set(df.columns)
-    
     if missing_columns:
         raise DataValidationError(
-            f"Required columns are missing from the raw data: {missing_columns}\n"
-            f"Columns found : {list(df.columns)}"
+            f"Required columns missing from data: {missing_columns}\n"
+            f"Columns found: {list(df.columns)}"
         )
-    
-    # Check 3 : The target column must not be entierly missing 
-    target_missing_percentage = df[TARGET_COLUMN].isna().mean()
-    if target_missing_percentage > MAX_MISSING_PERCENTAGE:
+
+    target_missing_pct = df[TARGET_COLUMN].isna().mean()
+    if target_missing_pct > MAX_MISSING_PERCENTAGE:
         raise DataValidationError(
-            f"Target Column '{TARGET_COLUMN}' is {target_missing_percentage:.2%} missing"
-            f" MAXIMUM Allowed is {MAX_MISSING_PERCENTAGE:.2%}.\n"
-            f"Please check the raw data file for completeness."
+            f"Target column '{TARGET_COLUMN}' is {target_missing_pct:.1%} missing. "
+            f"Maximum allowed is {MAX_MISSING_PERCENTAGE:.1%}."
         )
-    
+
     log.info(
-        f"Validation passed -"
-        f"{target_missing_percentage:.2%} of target column is missing, which is within the allowed threshold."
+        f"Validation passed — "
+        f"{target_missing_pct:.1%} missing in target column"
     )
 
+
 # ----------------------------------------------------------------
-# Step 3: Clean
+# Stage 3 — Clean
 # ----------------------------------------------------------------
-def clean_data(df : pd.DataFrame) -> pd.DataFrame:
+
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Transforms the raw DataFrame into a clean , typed time series.
-    Steps performed:
-      - Combines Date and Time columns into a single datetime index
-      - Converts all numeric columns to float
-      - Replaces physically impossible values with NaN
-      - Fills missing values using forward-fill then backward-fill
-      - Sorts by time
-    
-      Args:
-        df (pd.DataFrame): The raw DataFrame from load_raw_data()
+    Transforms the raw DataFrame into a clean typed time series.
+
+    Steps:
+      1. Combine Date + Time into a single datetime index
+      2. Convert all numeric columns from strings to float
+      3. Replace physically impossible readings with NaN
+      4. Sort chronologically
+      5. Forward-fill then backward-fill missing values
+
+    Args:
+        df: Raw DataFrame from load_raw_data()
+
     Returns:
-        A clean DataFrame with a datetime index and float columns 
+        Clean DataFrame with a DatetimeIndex and float columns
     """
     log = logger.bind(name=LOGGER_NAME)
     log.info("Cleaning Data")
 
-    # --- Combine Date + Time into a single datetime column ---
-    # The UCI dataset has "16/12/2006" in Date and "17:24:00" in Time.
-    # We combine them into "16/12/2006 17:24:00" then parse that as a datetime.
+    df = df.copy()
+
+    # Combine "16/12/2006" + "17:24:00" into one datetime column
     df[DATETIME_COLUMN] = pd.to_datetime(
         df[DATE_COLUMN] + " " + df[TIME_COLUMN],
-        dayfirst=True,
-        errors="coerce",
-        # dayfirst=True tells pandas the format is DD/MM/YYYY (European format)
-        # Without this, pandas might interpret "16/12/2006" as month 16, which fails
+        dayfirst=True,   # European date format: DD/MM/YYYY
+        errors="coerce", # Unparseable values become NaT instead of crashing
     )
 
-    # Set the datetime column as the index of the DataFrame.
-    # A time series DataFrame should always be indexed by time —
-    # this enables time-based operations like resampling.
     df = df.set_index(DATETIME_COLUMN)
-
-    # Drop the original Date and Time columns — we no longer need them
     df = df.drop(columns=[DATE_COLUMN, TIME_COLUMN], errors="ignore")
 
-    # --- Convert numeric columns to float ---
+    # Convert all numeric columns from string to float
     for col in NUMERIC_COLUMNS:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-    
-     # --- Replace physically impossible values with NaN ---
-    # A power reading below 0 or above 20kW is a sensor error.
-    # We replace these with NaN so they get filled in the next step,
-    # rather than corrupting our model with impossible inputs.
+
+    # Replace physically impossible power readings with NaN
+    # .where(condition) keeps values where True, replaces with NaN where False
     df[TARGET_COLUMN] = df[TARGET_COLUMN].where(
         (df[TARGET_COLUMN] >= MIN_VALID_POWER) &
         (df[TARGET_COLUMN] <= MAX_VALID_POWER),
         other=np.nan,
     )
 
-    # ---- Sort by time ----
     df = df.sort_index()
 
-  # --- Fill missing values ---
-    # Forward fill: replace NaN with the most recent valid value.
-    # This is appropriate for sensor data — if a reading is missing,
-    # the best estimate is the last known reading.
-    # limit=5 means we only forward-fill up to 5 consecutive missing values.
-    # A gap longer than 5 minutes likely means a real outage, not a sensor glitch.
+    # Forward fill: replace NaN with the last known value
+    # limit=5: only fill gaps of up to 5 consecutive missing minutes
+    # Longer gaps likely represent real outages — leave them as NaN
     df = df.ffill(limit=5)
-    # Backward fill: handle any remaining NaN at the very start of the data
-    # (where forward fill has nothing to look back at).
     df = df.bfill(limit=5)
 
-    # Number of missing values in the target column after cleaning
     missing_after = df[TARGET_COLUMN].isna().sum()
     log.info(
-        f"Cleaning Complete - "
-        f"{missing_after:,} remaining missing values in target column after cleaning."
+        f"Cleaning Complete - {missing_after:,} remaining missing values "
+        f"in target column after cleaning."
     )
     return df
 
+
 # ----------------------------------------------------------------
-# Step 4: Resample
+# Stage 4 — Resample
 # ----------------------------------------------------------------
 
 def resample_to_hourly(df: pd.DataFrame) -> pd.DataFrame:
     """
     Aggregates minute-level data to hourly averages.
 
-    The raw data has one row per minute (~2 million rows).
-    After resampling, we have one row per hour (~35,000 rows).
-    This is the right resolution for our forecasting models.
+    Raw data: ~2,075,259 rows (one per minute)
+    After resampling: ~34,589 rows (one per hour)
+
+    .resample("h") groups rows by hour.
+    .mean() takes the average of each group.
+    Any hour with no data at all becomes NaN — we forward-fill those.
 
     Args:
-        df: Clean DataFrame with a datetime index, minute resolution
+        df: Clean DataFrame with a DatetimeIndex at minute resolution
 
     Returns:
         DataFrame with hourly resolution
     """
     log = logger.bind(name=LOGGER_NAME)
-    log.info(f"Resampling from minute-level to {RESAMPLE_FREQUENCY} frequency") 
-    # Resample frequency is hourly ("h") as defined in config.py
+    log.info(f"Resampling from minute-level to {RESAMPLE_FREQUENCY} frequency")
 
-    rows_before = len(df)
+    rows_before  = len(df)
     df_resampled = df.resample(RESAMPLE_FREQUENCY).mean()
-
-    # After resampling, any hour with no data at all becomes a row of NaN.
-    # We fill these with forward fill.
     df_resampled = df_resampled.ffill()
+    rows_after   = len(df_resampled)
 
-    rows_after = len(df_resampled)
     log.info(
         f"Resampled from {rows_before:,} rows (minute) "
         f"to {rows_after:,} rows (hourly)"
     )
-
     return df_resampled
 
+
 # ----------------------------------------------------------------
-# Step 5: Save
+# Stage 5 — Save
 # ----------------------------------------------------------------
+
 def save_processed_data(df: pd.DataFrame, filepath: Path) -> None:
     """
     Saves the processed DataFrame to disk as a Parquet file.
 
-    All intermediate data in this project is saved as Parquet.
+    Parquet is a compressed binary format — much faster to load than CSV
+    for large files and preserves column types and the datetime index exactly.
 
     Args:
-        df: The processed DataFrame to save
+        df: Processed DataFrame to save
         filepath: Where to save it
     """
     log = logger.bind(name=LOGGER_NAME)
-
-    # Create the directory if it doesn't exist yet.
-    # exist_ok=True means: don't raise an error if it already exists.
     filepath.parent.mkdir(parents=True, exist_ok=True)
-
     df.to_parquet(filepath)
-    # .to_parquet() saves the DataFrame including its index (our datetime index)
-    # and all column types. When we load it back, everything is preserved exactly.
-
-    log.info(f"Saved processed data to {filepath} ({filepath.stat().st_size / 1024:.1f} KB)")
+    log.info(
+        f"Saved processed data to {filepath} "
+        f"({filepath.stat().st_size / 1024:.1f} KB)"
+    )
 
 
 # ----------------------------------------------------------------
 # Public entry point
 # ----------------------------------------------------------------
+
 def run_pipeline(
-    input_filepath: Optional[Path] = None,
+    input_filepath: Optional[Path]  = None,
     output_filepath: Optional[Path] = None,
     save: bool = True,
 ) -> pd.DataFrame:
+    """
+    Runs the complete ingestion pipeline end to end.
+
+    This is the only function you should call from outside this module.
+    It chains load → validate → clean → resample → save in order.
+
+    Args:
+        input_filepath:  Path to raw data. Defaults to RAW_DATA_FILE.
+        output_filepath: Path to save result. Defaults to PROCESSED_DATA_FILE.
+        save:            Whether to save to disk. Set False during testing.
+
+    Returns:
+        Clean hourly DataFrame ready for feature engineering.
+    """
     log = logger.bind(name=LOGGER_NAME)
     log.info("=== Starting ingestion pipeline ===")
 
-    # Use config defaults if no paths were passed in.
-    # RAW_DATA_FILE and PROCESSED_DATA_FILE are already imported
-    # at the top of this file — no need to import them again here.
-    input_filepath = input_filepath or RAW_DATA_FILE
+    input_filepath  = input_filepath  or RAW_DATA_FILE
     output_filepath = output_filepath or PROCESSED_DATA_FILE
 
-    # Run each stage in order, passing the output of one into the next
-    df_raw = load_raw_data(input_filepath)
+    df_raw    = load_raw_data(input_filepath)
     validate_raw_data(df_raw)
-    df_clean = clean_data(df_raw)
+    df_clean  = clean_data(df_raw)
     df_hourly = resample_to_hourly(df_clean)
 
     if save:
@@ -298,5 +307,4 @@ def run_pipeline(
         f"=== Pipeline complete — "
         f"{len(df_hourly):,} hourly rows ready for feature engineering ==="
     )
-
     return df_hourly
