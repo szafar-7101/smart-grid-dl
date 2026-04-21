@@ -1,0 +1,9 @@
+{
+  "lstm_units_1": 256,
+  "lstm_units_2": 64,
+  "dropout_1": 0.5,
+  "dropout_2": 0.30000000000000004,
+  "learning_rate": 0.00023279207349578577,
+  "batch_size": 64,
+  "huber_delta": 0.16642424710441633
+}
