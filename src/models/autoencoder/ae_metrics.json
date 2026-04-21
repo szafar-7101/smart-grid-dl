@@ -1,0 +1,11 @@
+{
+    "train_mean_error": 0.014113490469753742,
+    "train_std_error": 0.003459207946434617,
+    "threshold": 0.04276900365948677,
+    "test_mean_error": 0.022586699575185776,
+    "test_max_error": 0.04950648546218872,
+    "n_test_anomalies": 30,
+    "test_anomaly_rate_pct": 0.4191114836546521,
+    "sequence_length": 24,
+    "features_used": 17
+}
