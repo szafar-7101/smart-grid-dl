@@ -1,44 +1,77 @@
 # ---- Python ----
-# Compiled Python files (auto-generated, not needed in Git)
 __pycache__/
 *.py[cod]
+*.pyo
 
+# ---- Virtual environment ----
 .venv/
+venv/
+env/
 
-# Build artifacts from pip install -e .
+# ---- Build / packaging ----
 *.egg-info/
 dist/
 build/
+.eggs/
 
 # ---- Data ----
-# Raw data files are tracked by DVC, not Git
+# Raw and processed data — tracked by DVC, not Git
 data/raw/
 data/processed/
 data/features/
+data/*.csv
+data/*.parquet
 
-# ---- Models ----
-# Trained model files are large — tracked by DVC, not Git
+# ---- Trained model artefacts ----
+# Binary weights and scalers are large; JSON summaries are kept for reference
+src/models/**/*.keras
+src/models/**/*.pkl
+src/models/**/*.h5
+src/models/**/*.pb
+src/models/**/*.png
+src/models/**/history.json
+src/models/**/ae_history.json
+# Root-level models/ placeholder (empty file committed intentionally)
 models/
-*.h5
-*.pb
-saved_model/
 
 # ---- MLflow ----
-# MLflow creates a local folder to store experiment results
 mlruns/
 mlartifacts/
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- Notebooks ----
+.ipynb_checkpoints/
+notebooks/*.csv
+
+# ---- Streamlit ----
+.streamlit/
 
 # ---- Environment variables ----
 .env
 .env.local
+.env.*.local
 
-# ---- VS Code ----
+# ---- IDE / editor ----
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- Testing ----
+.pytest_cache/
+.coverage
+htmlcov/
 
 # ---- macOS ----
-# macOS creates these hidden files in every folder — we don't need them
 .DS_Store
+**/.DS_Store
 
-# ---- Notebooks ----
-# Notebook checkpoints are auto-generated
-.ipynb_checkpoints/
+# ---- Docker ----
+.dockerignore
+
+# ---- Misc ----
+CLAUDE.md
